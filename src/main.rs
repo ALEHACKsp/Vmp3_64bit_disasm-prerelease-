@@ -9,12 +9,12 @@ mod transforms;
 mod util;
 mod vm_handler;
 mod vm_matchers;
-mod vm_disassemblers;
 
 use clap::Parser;
 use vm_handler::{VmContext, VmHandler};
 
 use crate::util::handle_vm_call;
+use crate::vm_matchers::HandlerClass;
 
 #[derive(Parser, Debug)]
 struct CommandLineArgs {
@@ -37,8 +37,44 @@ fn main() -> Result<(), Box<dyn Error>> {
     let pe_file = PeFile::from_bytes(&map)?;
     let pe_bytes = std::fs::read(input_file)?;
 
-    let vm_context = VmContext::new(&pe_file, &pe_bytes, command_line_args.vm_call_address);
-    println!("{:#x?}", vm_context);
+    let mut vm_context = VmContext::new(&pe_file, &pe_bytes, command_line_args.vm_call_address);
 
+    loop {
+        let vm_handler = VmHandler::new(vm_context.handler_address, &pe_file, &pe_bytes);
+        let handler_class = vm_handler.match_handler_class(&vm_context.register_allocation);
+        match handler_class {
+            HandlerClass::UnconditionalBranch => {
+                println!("Disassembled unconditional branch");
+                println!("[Stopping]");
+                break;
+            },
+            HandlerClass::VmExit => {
+                println!("Disassembled vm_exit");
+                println!("[Stopping]");
+                break;
+            },
+            HandlerClass::ByteOperand => {
+                println!("Disassembled single byte operand");
+                vm_context.disassemble_single_byte_operand(&vm_handler, &pe_file, &pe_bytes);
+            },
+            HandlerClass::DwordOperand => {
+                println!("Disassembled single dword operand");
+                vm_context.disassemble_single_dword_operand(&vm_handler, &pe_file, &pe_bytes);
+            },
+            HandlerClass::WordOperand => {
+                println!("Disassembled single word operand");
+                vm_context.disassemble_single_word_operand(&vm_handler, &pe_file, &pe_bytes);
+            },
+            HandlerClass::QwordOperand => {
+                println!("Disassembled single qword operand");
+                vm_context.disassemble_single_qword_operand(&vm_handler, &pe_file, &pe_bytes);
+            },
+            HandlerClass::NoOperand => {
+                println!("Disassembled no operand");
+                vm_context.disassemble_no_operand(&vm_handler, &pe_file, &pe_bytes);
+            },
+        }
+        println!("{:#x?}", vm_context);
+    }
     Ok(())
 }

@@ -1,5 +1,11 @@
 use crate::{
-    match_assembly::{match_fetch_encrypted_vip, match_fetch_vip, match_push_rolling_key},
+    match_assembly::{
+        match_fetch_encrypted_vip, match_fetch_vip, match_push_rolling_key,
+        match_xor_16_rolling_key_dest, match_xor_16_rolling_key_source,
+        match_xor_32_rolling_key_source, match_xor_64_rolling_key_dest,
+        match_xor_64_rolling_key_source, match_xor_8_rolling_key_dest,
+        match_xor_8_rolling_key_source,
+    },
     transforms::{get_transform_for_instruction, EmulateEncryption, EmulateTransform},
     util::*,
 };
@@ -19,10 +25,6 @@ pub struct VmRegisterAllocation {
 pub struct VmContext {
     /// Register allocation of the vm
     pub register_allocation: VmRegisterAllocation,
-    /// Map VIP to handler type
-    pub handlers: BTreeMap<u64, HandlerType>,
-    /// Map VIP to handler address in binary
-    pub handler_addresses: BTreeMap<u64, u64>,
     /// VmEntry address
     pub vm_entry_address: u64,
     /// Pushed value
@@ -54,16 +56,10 @@ impl VmContext {
 
         let direction_is_forwards = vm_entry_handler.determine_is_forwards(&register_allocation);
 
-        let mut handlers = BTreeMap::new();
-        let mut handler_addresses = BTreeMap::new();
-
         // Get the initial_vip
         let initial_vip =
             vm_entry_handler.get_initial_vip(&register_allocation, pushed_val) + 0x100000000;
         let mut vip = initial_vip;
-
-        handlers.insert(vip, HandlerType::VmEntry);
-        handler_addresses.insert(vip, vm_entry_address);
 
         // Rolling key is initialized to the initial vip
         let mut rolling_key = initial_vip;
@@ -101,8 +97,6 @@ impl VmContext {
 
         let vip_value = vip;
         Self { register_allocation,
-               handlers,
-               handler_addresses,
                vm_entry_address,
                pushed_val,
                vip_direction_forwards: direction_is_forwards,
@@ -110,6 +104,268 @@ impl VmContext {
                rolling_key,
                vip_value,
                handler_address: next_handler_address }
+    }
+
+    pub fn disassemble_single_dword_operand(&mut self,
+                                            vm_handler: &VmHandler,
+                                            pe_file: &PeFile,
+                                            pe_bytes: &[u8])
+                                            -> u32 {
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_32_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                                  !match_push_rolling_key(insn,
+                                                                          &self.register_allocation)
+                                              });
+
+        let encrypted_dword = fetch_dword_vip(pe_file,
+                                              pe_bytes,
+                                              &mut self.vip_value,
+                                              self.vip_direction_forwards);
+
+        let return_dword = encrypted_dword.emulate_encryption(encryption_iter,
+                                                              &mut self.rolling_key,
+                                                              encrypted_reg);
+
+        let encrypted_offset = fetch_dword_vip(pe_file,
+                                               pe_bytes,
+                                               &mut self.vip_value,
+                                               self.vip_direction_forwards);
+
+        let instruction_iter = vm_handler.instructions.iter();
+        // Skip it twice because dword arg
+        let mut match_count = 0;
+        let mut instruction_iter =
+            instruction_iter.skip_while(|insn| {
+                                if match_xor_32_rolling_key_source(insn, &self.register_allocation) {
+                                    match_count += 1;
+                                }
+
+                                match_count != 2
+                            });
+
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                                  !match_push_rolling_key(insn,
+                                                                          &self.register_allocation)
+                                              });
+
+        let unencrypted_offset = encrypted_offset.emulate_encryption(encryption_iter,
+                                                                     &mut self.rolling_key,
+                                                                     encrypted_reg);
+
+        // hmmm yes
+        // movsxd offset_reg, offset_reg_32
+        // add handler_base, offset_reg
+        let next_handler_address = self.handler_address
+                                       .wrapping_add(unencrypted_offset as i32 as i64 as u64);
+
+        self.handler_address = next_handler_address;
+
+        return_dword
+    }
+
+    pub fn disassemble_single_qword_operand(&mut self,
+                                            vm_handler: &VmHandler,
+                                            pe_file: &PeFile,
+                                            pe_bytes: &[u8])
+                                            -> u64 {
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_64_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                  !match_xor_64_rolling_key_dest(insn, &self.register_allocation)
+                              });
+        let encrypted_qword = fetch_qword_vip(pe_file,
+                                              pe_bytes,
+                                              &mut self.vip_value,
+                                              self.vip_direction_forwards);
+
+        let return_qword = encrypted_qword.emulate_encryption(encryption_iter,
+                                                              &mut self.rolling_key,
+                                                              encrypted_reg);
+
+        let encrypted_offset = fetch_dword_vip(pe_file,
+                                               pe_bytes,
+                                               &mut self.vip_value,
+                                               self.vip_direction_forwards);
+
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_32_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                                  !match_push_rolling_key(insn,
+                                                                          &self.register_allocation)
+                                              });
+
+        let unencrypted_offset = encrypted_offset.emulate_encryption(encryption_iter,
+                                                                     &mut self.rolling_key,
+                                                                     encrypted_reg);
+
+        // hmmm yes
+        // movsxd offset_reg, offset_reg_32
+        // add handler_base, offset_reg
+        let next_handler_address = self.handler_address
+                                       .wrapping_add(unencrypted_offset as i32 as i64 as u64);
+
+        self.handler_address = next_handler_address;
+
+        return_qword
+    }
+
+    pub fn disassemble_single_word_operand(&mut self,
+                                           vm_handler: &VmHandler,
+                                           pe_file: &PeFile,
+                                           pe_bytes: &[u8])
+                                           -> u16 {
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_16_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                  !match_xor_16_rolling_key_dest(insn, &self.register_allocation)
+                              });
+        let encrypted_word = fetch_word_vip(pe_file,
+                                            pe_bytes,
+                                            &mut self.vip_value,
+                                            self.vip_direction_forwards);
+
+        let return_word = encrypted_word.emulate_encryption(encryption_iter,
+                                                            &mut self.rolling_key,
+                                                            encrypted_reg);
+
+        let encrypted_offset = fetch_dword_vip(pe_file,
+                                               pe_bytes,
+                                               &mut self.vip_value,
+                                               self.vip_direction_forwards);
+
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_32_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                                  !match_push_rolling_key(insn,
+                                                                          &self.register_allocation)
+                                              });
+
+        let unencrypted_offset = encrypted_offset.emulate_encryption(encryption_iter,
+                                                                     &mut self.rolling_key,
+                                                                     encrypted_reg);
+
+        // hmmm yes
+        // movsxd offset_reg, offset_reg_32
+        // add handler_base, offset_reg
+        let next_handler_address = self.handler_address
+                                       .wrapping_add(unencrypted_offset as i32 as i64 as u64);
+
+        self.handler_address = next_handler_address;
+
+        return_word
+    }
+
+    pub fn disassemble_single_byte_operand(&mut self,
+                                           vm_handler: &VmHandler,
+                                           pe_file: &PeFile,
+                                           pe_bytes: &[u8])
+                                           -> u8 {
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_8_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                  !match_xor_8_rolling_key_dest(insn, &self.register_allocation)
+                              });
+        let encrypted_byte = fetch_byte_vip(pe_file,
+                                            pe_bytes,
+                                            &mut self.vip_value,
+                                            self.vip_direction_forwards);
+
+        let return_byte = encrypted_byte.emulate_encryption(encryption_iter,
+                                                            &mut self.rolling_key,
+                                                            encrypted_reg);
+
+        let encrypted_offset = fetch_dword_vip(pe_file,
+                                               pe_bytes,
+                                               &mut self.vip_value,
+                                               self.vip_direction_forwards);
+
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_32_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                                  !match_push_rolling_key(insn,
+                                                                          &self.register_allocation)
+                                              });
+
+        let unencrypted_offset = encrypted_offset.emulate_encryption(encryption_iter,
+                                                                     &mut self.rolling_key,
+                                                                     encrypted_reg);
+
+        // hmmm yes
+        // movsxd offset_reg, offset_reg_32
+        // add handler_base, offset_reg
+        let next_handler_address = self.handler_address
+                                       .wrapping_add(unencrypted_offset as i32 as i64 as u64);
+
+        self.handler_address = next_handler_address;
+
+        return_byte
+    }
+
+    pub fn disassemble_no_operand(&mut self,
+                                  vm_handler: &VmHandler,
+                                  pe_file: &PeFile,
+                                  pe_bytes: &[u8]) {
+        let encrypted_offset = fetch_dword_vip(pe_file,
+                                               pe_bytes,
+                                               &mut self.vip_value,
+                                               self.vip_direction_forwards);
+
+        let instruction_iter = vm_handler.instructions.iter();
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       !match_xor_32_rolling_key_source(insn,
+                                                                       &self.register_allocation)
+                                                   });
+        let encrypted_reg = instruction_iter.next().unwrap().op0_register();
+        let encryption_iter = instruction_iter.take_while(|insn| {
+                                                  !match_push_rolling_key(insn,
+                                                                          &self.register_allocation)
+                                              });
+
+        let unencrypted_offset = encrypted_offset.emulate_encryption(encryption_iter,
+                                                                     &mut self.rolling_key,
+                                                                     encrypted_reg);
+
+        // hmmm yes
+        // movsxd offset_reg, offset_reg_32
+        // add handler_base, offset_reg
+        let next_handler_address = self.handler_address
+                                       .wrapping_add(unencrypted_offset as i32 as i64 as u64);
+
+        self.handler_address = next_handler_address;
     }
 }
 
@@ -257,7 +513,7 @@ impl VmHandler {
                 .iter()
                 .skip_while(|&insn| !match_fetch_encrypted_vip(insn, reg_allocation))
                 .take_while(|&insn| {
-                    !(insn.code() == Code::Lea_r64_m &&
+                    !((insn.code() == Code::Lea_r64_m || insn.code() == Code::Add_r64_rm64) &&
                       check_full_reg_written(insn, reg_allocation.vip.into()))
                 })
                 .filter(|&insn| check_full_reg_written(insn, reg_allocation.vip.into()))
@@ -348,6 +604,50 @@ pub enum HandlerType {
     VmEntry,
 }
 
+pub fn fetch_qword_vip(pe_file: &PeFile,
+                       pe_bytes: &[u8],
+                       vip: &mut u64,
+                       direction_is_forwards: bool)
+                       -> u64 {
+    let return_value;
+
+    if direction_is_forwards {
+        return_value = u64::from_le_bytes(read_bytes_at_va(pe_file, pe_bytes, *vip, 8).unwrap()
+                                                                                      .try_into()
+                                                                                      .unwrap());
+        *vip += 8;
+    } else {
+        *vip -= 8;
+        return_value = u64::from_le_bytes(read_bytes_at_va(pe_file, pe_bytes, *vip, 8).unwrap()
+                                                                                      .try_into()
+                                                                                      .unwrap());
+    }
+
+    return_value
+}
+
+pub fn fetch_word_vip(pe_file: &PeFile,
+                      pe_bytes: &[u8],
+                      vip: &mut u64,
+                      direction_is_forwards: bool)
+                      -> u16 {
+    let return_value;
+
+    if direction_is_forwards {
+        return_value = u16::from_le_bytes(read_bytes_at_va(pe_file, pe_bytes, *vip, 2).unwrap()
+                                                                                      .try_into()
+                                                                                      .unwrap());
+        *vip += 2;
+    } else {
+        *vip -= 2;
+        return_value = u16::from_le_bytes(read_bytes_at_va(pe_file, pe_bytes, *vip, 2).unwrap()
+                                                                                      .try_into()
+                                                                                      .unwrap());
+    }
+
+    return_value
+}
+
 pub fn fetch_dword_vip(pe_file: &PeFile,
                        pe_bytes: &[u8],
                        vip: &mut u64,
@@ -365,6 +665,24 @@ pub fn fetch_dword_vip(pe_file: &PeFile,
         return_value = u32::from_le_bytes(read_bytes_at_va(pe_file, pe_bytes, *vip, 4).unwrap()
                                                                                       .try_into()
                                                                                       .unwrap());
+    }
+
+    return_value
+}
+
+pub fn fetch_byte_vip(pe_file: &PeFile,
+                      pe_bytes: &[u8],
+                      vip: &mut u64,
+                      direction_is_forwards: bool)
+                      -> u8 {
+    let return_value;
+
+    if direction_is_forwards {
+        return_value = read_bytes_at_va(pe_file, pe_bytes, *vip, 4).unwrap()[0];
+        *vip += 1;
+    } else {
+        *vip -= 1;
+        return_value = read_bytes_at_va(pe_file, pe_bytes, *vip, 4).unwrap()[0];
     }
 
     return_value

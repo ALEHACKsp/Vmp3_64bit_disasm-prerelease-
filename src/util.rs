@@ -1,5 +1,5 @@
 use iced_x86::{
-    Decoder, DecoderOptions, Formatter, Instruction, InstructionInfoFactory,
+    Code, Decoder, DecoderOptions, Formatter, Instruction, InstructionInfoFactory,
     InstructionInfoOptions, NasmFormatter, OpAccess, Register,
 };
 use pelite::pe64::{Pe, PeFile};
@@ -40,6 +40,13 @@ pub fn handle_vm_call(pe_file: &PeFile,
                                                          pe_bytes,
                                                          push_call_addr +
                                                          push_instruction.len() as u64);
+    if push_instruction.code() != Code::Pushq_imm32 {
+        panic!("Vm Entry address is not correctly chosen");
+    }
+
+    if call_instruction.code() != Code::Call_rel32_64 {
+        panic!("Vm Entry address is not correctly chosen");
+    }
 
     let pushed_val = push_instruction.immediate32to64() as u64;
     let vm_entry_address = call_instruction.near_branch64();

@@ -9,23 +9,23 @@ pub fn get_transform_for_instruction(instruction: &Instruction) -> Option<Transf
         Code::Bswap_r32 => Some(Transform::ByteSwap32),
         Code::Bswap_r64 => Some(Transform::ByteSwap64),
 
+        Code::Sub_AL_imm8 => Some(Transform::SubtractConstant8(instruction.immediate8())),
         Code::Sub_rm8_imm8 => Some(Transform::SubtractConstant8(instruction.immediate8())),
+        Code::Sub_AX_imm16 => Some(Transform::SubtractConstant16(instruction.immediate16())),
         Code::Sub_rm16_imm16 => Some(Transform::SubtractConstant16(instruction.immediate16())),
-        Code::Sub_rm32_imm32 | Code::Sub_EAX_imm32 => {
-            Some(Transform::SubtractConstant32(instruction.immediate32()))
-        },
-        Code::Sub_rm64_imm32 | Code::Sub_RAX_imm32 => {
-            Some(Transform::SubtractConstant64(instruction.immediate64()))
-        },
+        Code::Sub_EAX_imm32 => Some(Transform::SubtractConstant32(instruction.immediate32())),
+        Code::Sub_rm32_imm32 => Some(Transform::SubtractConstant32(instruction.immediate32())),
+        Code::Sub_RAX_imm32 => Some(Transform::SubtractConstant64(instruction.immediate64())),
+        Code::Sub_rm64_imm32 => Some(Transform::SubtractConstant64(instruction.immediate64())),
 
+        Code::Add_AL_imm8 => Some(Transform::AddConstant8(instruction.immediate8())),
         Code::Add_rm8_imm8 => Some(Transform::AddConstant8(instruction.immediate8())),
+        Code::Add_AX_imm16 => Some(Transform::AddConstant16(instruction.immediate16())),
         Code::Add_rm16_imm16 => Some(Transform::AddConstant16(instruction.immediate16())),
-        Code::Add_rm32_imm32 | Code::Add_EAX_imm32 => {
-            Some(Transform::AddConstant32(instruction.immediate32()))
-        },
-        Code::Add_rm64_imm32 | Code::Add_RAX_imm32 => {
-            Some(Transform::AddConstant64(instruction.immediate64()))
-        },
+        Code::Add_EAX_imm32 => Some(Transform::AddConstant32(instruction.immediate32())),
+        Code::Add_rm32_imm32 => Some(Transform::AddConstant32(instruction.immediate32())),
+        Code::Add_RAX_imm32 => Some(Transform::AddConstant64(instruction.immediate64())),
+        Code::Add_rm64_imm32 => Some(Transform::AddConstant64(instruction.immediate64())),
 
         Code::Neg_rm8 => Some(Transform::Negate8),
         Code::Neg_rm16 => Some(Transform::Negate16),
@@ -67,9 +67,13 @@ pub fn get_transform_for_instruction(instruction: &Instruction) -> Option<Transf
         Code::Dec_rm32 => Some(Transform::Decrement32),
         Code::Dec_rm64 => Some(Transform::Decrement64),
 
+        Code::Xor_AL_imm8 => Some(Transform::XorConstant8(instruction.immediate8())),
         Code::Xor_rm8_imm8 => Some(Transform::XorConstant8(instruction.immediate8())),
+        Code::Xor_AX_imm16 => Some(Transform::XorConstant16(instruction.immediate16())),
         Code::Xor_rm16_imm16 => Some(Transform::XorConstant16(instruction.immediate16())),
+        Code::Xor_EAX_imm32 => Some(Transform::XorConstant32(instruction.immediate32())),
         Code::Xor_rm32_imm32 => Some(Transform::XorConstant32(instruction.immediate32())),
+        Code::Xor_RAX_imm32 => Some(Transform::XorConstant64(instruction.immediate64())),
         Code::Xor_rm64_imm32 => Some(Transform::XorConstant64(instruction.immediate64())),
         _ => None,
     }
@@ -267,6 +271,7 @@ impl EmulateEncryption for u32 {
         for instruction in
             instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
         {
+
             let transform = get_transform_for_instruction(&instruction);
 
             if let Some(transform) = transform {
@@ -320,7 +325,6 @@ impl EmulateEncryption for u8 {
             instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
         {
             let transform = get_transform_for_instruction(&instruction);
-
             if let Some(transform) = transform {
                 self = self.emulate_transform(transform);
             }
@@ -355,7 +359,10 @@ fn emulate_transform64(transform: Transform,
         Transform::Decrement64 => input.wrapping_sub(1),
 
         Transform::Increment64 => input.wrapping_add(1),
-        _ => unreachable!(),
+        _ => {
+            dbg!(transform);
+            unreachable!();
+        },
     }
 }
 
@@ -382,7 +389,10 @@ fn emulate_transform32(transform: Transform,
         Transform::Decrement32 => input.wrapping_sub(1),
 
         Transform::Increment32 => input.wrapping_add(1),
-        _ => unreachable!(),
+        _ => {
+            dbg!(transform);
+            unreachable!();
+        },
     }
 }
 
@@ -409,7 +419,10 @@ fn emulate_transform16(transform: Transform,
         Transform::Decrement16 => input.wrapping_sub(1),
 
         Transform::Increment16 => input.wrapping_add(1),
-        _ => unreachable!(),
+        _ => {
+            dbg!(transform);
+            unreachable!();
+        },
     }
 }
 
@@ -434,6 +447,9 @@ fn emulate_transform8(transform: Transform,
         Transform::Decrement8 => input.wrapping_sub(1),
 
         Transform::Increment8 => input.wrapping_add(1),
-        _ => unreachable!(),
+        _ => {
+            dbg!(transform);
+            unreachable!();
+        },
     }
 }
