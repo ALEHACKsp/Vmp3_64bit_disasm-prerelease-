@@ -271,7 +271,6 @@ impl EmulateEncryption for u32 {
         for instruction in
             instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
         {
-
             let transform = get_transform_for_instruction(&instruction);
 
             if let Some(transform) = transform {

@@ -93,7 +93,6 @@ impl VmContext {
         // add handler_base, offset_reg
         let next_handler_address =
             handler_base_address.wrapping_add(unencrypted_offset as i32 as i64 as u64);
-        println!("{:#x}", next_handler_address);
 
         let vip_value = vip;
         Self { register_allocation,
@@ -140,14 +139,15 @@ impl VmContext {
         let instruction_iter = vm_handler.instructions.iter();
         // Skip it twice because dword arg
         let mut match_count = 0;
-        let mut instruction_iter =
-            instruction_iter.skip_while(|insn| {
-                                if match_xor_32_rolling_key_source(insn, &self.register_allocation) {
-                                    match_count += 1;
-                                }
+        let mut instruction_iter = instruction_iter.skip_while(|insn| {
+                                                       if match_xor_32_rolling_key_source(insn,
+                                                                          &self.register_allocation)
+                                       {
+                                           match_count += 1;
+                                       }
 
-                                match_count != 2
-                            });
+                                                       match_count != 2
+                                                   });
 
         let encrypted_reg = instruction_iter.next().unwrap().op0_register();
         let encryption_iter = instruction_iter.take_while(|insn| {
