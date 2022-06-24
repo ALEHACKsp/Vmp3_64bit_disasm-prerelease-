@@ -16,6 +16,7 @@ Next releases will also allow specifying the vmcontext to allow disassembling fr
 ![example3](https://user-images.githubusercontent.com/102005914/175548166-ccc3bde9-fd20-44b7-850e-5b2c07119874.png)
 
 ## Example Output
+```
 VmContext {
     register_allocation: VmRegisterAllocation {
         vip: R8,
@@ -121,3 +122,4 @@ VmContext {
 Disassembled no vip change
 [Stopping]
 0x1406f0494 -> VmExit
+```
