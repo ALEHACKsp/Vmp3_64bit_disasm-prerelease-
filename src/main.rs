@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
         }
 
-        println!("{:#x} -> {:x?}", handler_address, handler_instruction);
+        println!("{:#x} -> {}", handler_address, handler_instruction);
 
         if halt {
             break;

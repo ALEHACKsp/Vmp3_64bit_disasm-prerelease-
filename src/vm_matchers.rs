@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use iced_x86::{Code, Register};
 
 use crate::{
@@ -48,6 +50,53 @@ pub enum HandlerVmInstruction {
     UnknownNoVipChange,
     Unknown,
 }
+
+impl Display for HandlerVmInstruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn format_reg_offset(reg_offset: u8, size: usize) -> String {
+            let register_number = reg_offset / 8;
+            let inner_reg_offset = reg_offset % 8;
+
+            match size {
+                8 => {format!("r{}", register_number)},
+                4 => {
+                    match inner_reg_offset {
+                        0 => format!("r{}_low", register_number),
+                        4 => format!("r{}_high", register_number),
+                        _ => unimplemented!(),
+                    }
+                },
+                _ => unimplemented!(),
+            }
+        }
+
+        match self {
+            HandlerVmInstruction::Pop(size, reg_offset) => write!(f, "pop{} {}", size * 8, format_reg_offset(*reg_offset, *size)),
+            HandlerVmInstruction::Push(size, reg_offset) => write!(f, "push{} {}", size * 8, format_reg_offset(*reg_offset, *size)),
+            HandlerVmInstruction::PushImm64(imm64) => write!(f, "push_imm64 {:#x}", imm64),
+            HandlerVmInstruction::PushImm32(imm32) => write!(f, "push_imm32 {:#x}", imm32),
+            HandlerVmInstruction::PushImm16(imm16) => write!(f, "push_imm16 {:#x}", imm16),
+            HandlerVmInstruction::PushVsp(size) => write!(f, "pushvsp{}", size * 8),
+            HandlerVmInstruction::PopVsp(size) => write!(f, "popvsp{}", size * 8),
+            HandlerVmInstruction::Add(size) => write!(f, "add{}", size * 8),
+            HandlerVmInstruction::Shr(size) => write!(f, "shr{}", size * 8),
+            HandlerVmInstruction::Nand(size) => write!(f, "nand{}", size * 8),
+            HandlerVmInstruction::Nor(size) => write!(f, "nor{}", size * 8),
+            HandlerVmInstruction::Fetch(size) => write!(f, "fetch{}", size * 8),
+            HandlerVmInstruction::Store(size) => write!(f, "store{}", size * 8),
+            HandlerVmInstruction::VmExit => write!(f, "vm_exit"),
+            HandlerVmInstruction::UnknownByteOperand => write!(f, "[unknown byte operand instruction]"),
+            HandlerVmInstruction::UnknownWordOperand => write!(f, "[unknown word operand instruction]"),
+            HandlerVmInstruction::UnknownDwordOperand => write!(f, "[unknown dword operand instruction]"),
+            HandlerVmInstruction::UnknownQwordOperand => write!(f, "[unknown qword operand instruction]"),
+            HandlerVmInstruction::UnknownNoOperand => write!(f, "[unknown no operand instruction]"),
+            HandlerVmInstruction::UnknownNoVipChange => write!(f, "[unknown no vip change instruction]"),
+            HandlerVmInstruction::Unknown => write!(f, "[unknown instruction]"),
+        }
+    }
+}
+
+
 
 impl VmHandler {
     pub fn match_handler_class(&self,
