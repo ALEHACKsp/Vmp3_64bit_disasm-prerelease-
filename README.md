@@ -13,7 +13,7 @@ This project was tested on vgk.sys (sha256 266ddd98fdd9df939993d947b0edb052a3473
 ### Call into vmp3 with pushed value
 ![example1](https://user-images.githubusercontent.com/102005914/175548145-8cb85a51-fef4-4a4c-b11b-f8049636b590.png)
 
-### Converting the address to decimal (I need to add hex parsing :) )
+### Converting the address to decimal ( Newest commit fixed this use hex addresses now )
 ![example2](https://user-images.githubusercontent.com/102005914/175548162-5d352eda-c66c-481b-ac7a-1697faa23e09.png)
 
 ### Invoking the disassembler
