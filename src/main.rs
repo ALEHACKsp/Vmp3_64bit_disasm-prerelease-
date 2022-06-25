@@ -1,6 +1,5 @@
-use std::{error::Error, path::PathBuf};
+use std::error::Error;
 
-use iced_x86::{Formatter, NasmFormatter};
 use pelite::pe64::PeFile;
 use pelite::FileMap;
 

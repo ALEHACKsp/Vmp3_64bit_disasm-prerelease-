@@ -30,9 +30,9 @@ pub fn match_not_reg(instruction: &Instruction,
         Code::Not_rm8 | Code::Not_rm16 | Code::Not_rm32 | Code::Not_rm64
             if instruction.op0_register().full_register() == register =>
         {
-            return true;
+            true
         },
-        _ => return false,
+        _ => false,
     }
 }
 
@@ -71,22 +71,13 @@ pub fn match_store_reg2_in_reg1(instruction: &Instruction,
                                 reg1: Register,
                                 reg2: Register)
                                 -> Option<usize> {
-    let instruction_size;
-    match instruction.code() {
-        Code::Mov_rm8_r8 => {
-            instruction_size = 1;
-        },
-        Code::Mov_rm16_r16 => {
-            instruction_size = 2;
-        },
-        Code::Mov_rm32_r32 => {
-            instruction_size = 4;
-        },
-        Code::Mov_rm64_r64 => {
-            instruction_size = 8;
-        },
+    let instruction_size = match instruction.code() {
+        Code::Mov_rm8_r8 => 1,
+        Code::Mov_rm16_r16 => 2,
+        Code::Mov_rm32_r32 => 4,
+        Code::Mov_rm64_r64 => 8,
         _ => return None,
-    }
+    };
 
     if instruction.op0_kind() != OpKind::Memory {
         return None;
@@ -210,12 +201,12 @@ pub fn match_fetch_reg_any_size(instruction: &Instruction,
 
     if mov_size.is_some() {
         if instruction.memory_base().full_register() == register {
-            return mov_size;
+            mov_size
         } else {
-            return None;
+            None
         }
     } else {
-        return None;
+        None
     }
 }
 
@@ -234,12 +225,12 @@ pub fn match_fetch_zx_reg_any_size(instruction: &Instruction,
 
     if mov_size.is_some() {
         if instruction.memory_base().full_register() == register {
-            return mov_size;
+            mov_size
         } else {
-            return None;
+            None
         }
     } else {
-        return None;
+        None
     }
 }
 pub fn match_store_reg_any_size(instruction: &Instruction,
@@ -255,12 +246,12 @@ pub fn match_store_reg_any_size(instruction: &Instruction,
 
     if mov_size.is_some() {
         if instruction.memory_base().full_register() == register {
-            return mov_size;
+            mov_size
         } else {
-            return None;
+            None
         }
     } else {
-        return None;
+        None
     }
 }
 

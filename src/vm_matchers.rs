@@ -9,7 +9,7 @@ use crate::{
         match_sub_vsp_get_amount,
     },
     util::check_full_reg_written,
-    vm_handler::{self, Registers, VmHandler, VmRegisterAllocation},
+    vm_handler::{Registers, VmHandler, VmRegisterAllocation},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,7 +63,7 @@ impl VmHandler {
 
         if (reg_allocation.vip != Registers::Rsi &&
             reg_allocation.vip != Registers::Rdi &&
-            vip_modification_vec.len() >= 1) ||
+            !vip_modification_vec.is_empty()) ||
            (vip_modification_vec.len() >= 2)
         {
             return HandlerClass::UnconditionalBranch;
@@ -79,12 +79,12 @@ impl VmHandler {
                             .collect::<Vec<_>>();
 
         match vip_update_vec.as_slice() {
-            &[] => return HandlerClass::NoVipChange,
-            &[4] => return HandlerClass::NoOperand,
-            &[8, 4] => return HandlerClass::QwordOperand,
-            &[4, 4] => return HandlerClass::DwordOperand,
-            &[2, 4] => return HandlerClass::WordOperand,
-            &[1, 4] => return HandlerClass::ByteOperand,
+            &[] => HandlerClass::NoVipChange,
+            &[4] => HandlerClass::NoOperand,
+            &[8, 4] => HandlerClass::QwordOperand,
+            &[4, 4] => HandlerClass::DwordOperand,
+            &[2, 4] => HandlerClass::WordOperand,
+            &[1, 4] => HandlerClass::ByteOperand,
             slice => {
                 panic!("Unimplemented handler class with slice {:?}", slice)
             },
@@ -239,10 +239,7 @@ fn vm_match_push_imm64(vm_handler: &VmHandler,
                        -> bool {
     let mut instruction_iter = vm_handler.instructions.iter();
     instruction_iter.find(|insn| match_sub_vsp_by_amount(insn, reg_allocation, 8));
-    instruction_iter.find(|insn| {
-                        match_store_reg_any_size(insn, reg_allocation.vsp.into()).is_some()
-                    })
-                    .is_some()
+    instruction_iter.any(|insn| match_store_reg_any_size(insn, reg_allocation.vsp.into()).is_some())
 }
 
 fn vm_match_push_imm32(vm_handler: &VmHandler,
@@ -250,10 +247,7 @@ fn vm_match_push_imm32(vm_handler: &VmHandler,
                        -> bool {
     let mut instruction_iter = vm_handler.instructions.iter();
     instruction_iter.find(|insn| match_sub_vsp_by_amount(insn, reg_allocation, 4));
-    instruction_iter.find(|insn| {
-                        match_store_reg_any_size(insn, reg_allocation.vsp.into()).is_some()
-                    })
-                    .is_some()
+    instruction_iter.any(|insn| match_store_reg_any_size(insn, reg_allocation.vsp.into()).is_some())
 }
 
 fn vm_match_push_imm16(vm_handler: &VmHandler,
@@ -261,15 +255,12 @@ fn vm_match_push_imm16(vm_handler: &VmHandler,
                        -> bool {
     let mut instruction_iter = vm_handler.instructions.iter();
     instruction_iter.find(|insn| match_sub_vsp_by_amount(insn, reg_allocation, 2));
-    instruction_iter.find(|insn| {
-                        match_store_reg_any_size(insn, reg_allocation.vsp.into()).is_some()
-                    })
-                    .is_some()
+    instruction_iter.any(|insn| match_store_reg_any_size(insn, reg_allocation.vsp.into()).is_some())
 }
 
 fn vm_match_pop_vsp_64(vm_handler: &VmHandler,
-                    reg_allocation: &VmRegisterAllocation) -> bool {
-    
+                       reg_allocation: &VmRegisterAllocation)
+                       -> bool {
     let mut instruction_iter = vm_handler.instructions.iter();
 
     let fetch_vsp_instruction_1 =
@@ -346,7 +337,7 @@ fn vm_match_shr(vm_handler: &VmHandler,
                         })?;
     let reg = fetch_vsp_instruction_1.op0_register();
 
-    let fetch_vsp_instruction_2 =
+    let _fetch_vsp_instruction_2 =
         instruction_iter.find(|insn| {
                             match_fetch_reg_any_size(insn, reg_allocation.vsp.into()).is_some()
                         })?;
@@ -371,7 +362,7 @@ fn vm_match_shr_byte(vm_handler: &VmHandler,
                         })?;
     let reg = fetch_vsp_instruction_1.op0_register().full_register();
 
-    let fetch_vsp_instruction_2 =
+    let _fetch_vsp_instruction_2 =
         instruction_iter.find(|insn| {
                             match_fetch_reg_any_size(insn, reg_allocation.vsp.into()).is_some()
                         })?;
@@ -597,34 +588,27 @@ fn vm_match_vm_exit(vm_handler: &VmHandler,
                     -> bool {
     let instruction_iter = vm_handler.instructions.iter();
 
-    if !instruction_iter.clone()
-                        .find(|insn| match_ret(insn))
-                        .is_some()
+    if !instruction_iter.clone().any(match_ret) {
+        return false;
+    }
+
+    if !instruction_iter.clone().any(match_popfq) {
+        return false;
+    }
+
+    if !instruction_iter.clone().any(|insn| {
+                                    insn.code() == Code::Mov_r64_rm64 &&
+                                    insn.op0_register() == Register::RSP &&
+                                    insn.op1_register() == reg_allocation.vsp.into()
+                                })
     {
         return false;
     }
 
-    if !instruction_iter.clone()
-                        .find(|insn| match_popfq(insn))
-                        .is_some()
+    if instruction_iter.filter(|insn| insn.code() == Code::Pop_r64)
+                       .count() !=
+       15
     {
-        return false;
-    }
-
-    if !instruction_iter.clone()
-                        .find(|insn| {
-                            insn.code() == Code::Mov_r64_rm64 &&
-                            insn.op0_register() == Register::RSP &&
-                            insn.op1_register() == reg_allocation.vsp.into()
-                        })
-                        .is_some()
-    {
-        return false;
-    }
-
-    let pop_vec = instruction_iter.filter(|insn| insn.code() == Code::Pop_r64)
-                                  .collect::<Vec<_>>();
-    if pop_vec.len() != 15 {
         return false;
     }
 

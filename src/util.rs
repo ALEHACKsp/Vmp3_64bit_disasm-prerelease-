@@ -1,6 +1,6 @@
 use iced_x86::{
-    Code, Decoder, DecoderOptions, Formatter, Instruction, InstructionInfoFactory,
-    InstructionInfoOptions, NasmFormatter, OpAccess, Register,
+    Code, Decoder, DecoderOptions, Instruction, InstructionInfoFactory, InstructionInfoOptions,
+    OpAccess, Register,
 };
 use pelite::pe64::{Pe, PeFile};
 
@@ -27,8 +27,7 @@ pub fn disassemble_instruction_at_va(pe_file: &PeFile,
                                        instruction_address,
                                        DecoderOptions::NONE);
 
-    let instruction = decoder.decode();
-    instruction
+    decoder.decode()
 }
 
 pub fn handle_vm_call(pe_file: &PeFile,

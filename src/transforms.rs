@@ -130,61 +130,6 @@ pub enum Transform {
     XorConstant8(u8),
 }
 
-impl Transform {
-    pub fn get_size(&self) -> usize {
-        match self {
-            Self::ByteSwap64 => 64,
-            Self::ByteSwap32 => 32,
-            Self::ByteSwap16 => 16,
-
-            Self::SubtractConstant64(_) => 64,
-            Self::SubtractConstant32(_) => 32,
-            Self::SubtractConstant16(_) => 16,
-            Self::SubtractConstant8(_) => 8,
-
-            Self::AddConstant64(_) => 64,
-            Self::AddConstant32(_) => 32,
-            Self::AddConstant16(_) => 16,
-            Self::AddConstant8(_) => 8,
-
-            Self::Negate64 => 64,
-            Self::Negate32 => 32,
-            Self::Negate16 => 16,
-            Self::Negate8 => 8,
-
-            Self::Not64 => 64,
-            Self::Not32 => 32,
-            Self::Not16 => 16,
-            Self::Not8 => 8,
-
-            Self::RotateLeft64(_) => 64,
-            Self::RotateLeft32(_) => 32,
-            Self::RotateLeft16(_) => 16,
-            Self::RotateLeft8(_) => 8,
-
-            Self::RotateRight64(_) => 64,
-            Self::RotateRight32(_) => 32,
-            Self::RotateRight16(_) => 16,
-            Self::RotateRight8(_) => 8,
-
-            Self::Increment64 => 64,
-            Self::Increment32 => 32,
-            Self::Increment16 => 16,
-            Self::Increment8 => 8,
-
-            Self::Decrement64 => 64,
-            Self::Decrement32 => 32,
-            Self::Decrement16 => 16,
-            Self::Decrement8 => 8,
-
-            Self::XorConstant64(_) => 64,
-            Self::XorConstant32(_) => 32,
-            Self::XorConstant16(_) => 16,
-            Self::XorConstant8(_) => 8,
-        }
-    }
-}
-
 pub trait EmulateTransform {
     fn emulate_transform(self,
                          transform: Transform)
@@ -243,9 +188,9 @@ impl EmulateEncryption for u64 {
         self ^= *rolling_key as u64;
 
         for instruction in
-            instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
+            instruction_iter.filter(|&insn| check_full_reg_written(insn, encrypted_reg))
         {
-            let transform = get_transform_for_instruction(&instruction);
+            let transform = get_transform_for_instruction(instruction);
 
             if let Some(transform) = transform {
                 self = self.emulate_transform(transform);
@@ -269,9 +214,9 @@ impl EmulateEncryption for u32 {
         self ^= *rolling_key as u32;
 
         for instruction in
-            instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
+            instruction_iter.filter(|&insn| check_full_reg_written(insn, encrypted_reg))
         {
-            let transform = get_transform_for_instruction(&instruction);
+            let transform = get_transform_for_instruction(instruction);
 
             if let Some(transform) = transform {
                 self = self.emulate_transform(transform);
@@ -295,9 +240,9 @@ impl EmulateEncryption for u16 {
         self ^= *rolling_key as u16;
 
         for instruction in
-            instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
+            instruction_iter.filter(|&insn| check_full_reg_written(insn, encrypted_reg))
         {
-            let transform = get_transform_for_instruction(&instruction);
+            let transform = get_transform_for_instruction(instruction);
 
             if let Some(transform) = transform {
                 self = self.emulate_transform(transform);
@@ -321,9 +266,9 @@ impl EmulateEncryption for u8 {
         self ^= *rolling_key as u8;
 
         for instruction in
-            instruction_iter.filter(|&insn| check_full_reg_written(&insn, encrypted_reg))
+            instruction_iter.filter(|&insn| check_full_reg_written(insn, encrypted_reg))
         {
-            let transform = get_transform_for_instruction(&instruction);
+            let transform = get_transform_for_instruction(instruction);
             if let Some(transform) = transform {
                 self = self.emulate_transform(transform);
             }

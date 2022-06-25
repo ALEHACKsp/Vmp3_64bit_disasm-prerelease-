@@ -11,7 +11,6 @@ use crate::{
 };
 use iced_x86::{Code, Instruction, OpKind};
 use pelite::pe64::PeFile;
-use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct VmRegisterAllocation {
@@ -46,9 +45,9 @@ impl VmContext {
                pe_bytes: &[u8],
                vm_call_address: u64)
                -> Self {
-        let (pushed_val, vm_entry_address) = handle_vm_call(&pe_file, &pe_bytes, vm_call_address);
+        let (pushed_val, vm_entry_address) = handle_vm_call(pe_file, pe_bytes, vm_call_address);
 
-        let vm_entry_handler = VmHandler::new(vm_entry_address, &pe_file, &pe_bytes);
+        let vm_entry_handler = VmHandler::new(vm_entry_address, pe_file, pe_bytes);
 
         let push_order = vm_entry_handler.get_push_order_vm_entry();
 
@@ -461,7 +460,7 @@ impl VmHandler {
 
         for instruction in self.instructions
                                .iter()
-                               .take_while(|&&insn| !(insn.code() == Code::Mov_r64_imm64))
+                               .take_while(|&&insn| insn.code() != Code::Mov_r64_imm64)
         {
             match instruction.code() {
                 Code::Push_r64 => {
@@ -484,17 +483,17 @@ impl VmHandler {
         for instruction in self.instructions.iter() {
             match instruction.code() {
                 Code::Add_rm64_imm32 => {
-                    if reg_allocation.vip == instruction.op0_register().into() {
-                        if instruction.immediate32() == 0x4 {
-                            return true;
-                        }
+                    if reg_allocation.vip == instruction.op0_register().into() &&
+                       instruction.immediate32() == 0x4
+                    {
+                        return true;
                     }
                 },
                 Code::Sub_rm64_imm32 => {
-                    if reg_allocation.vip == instruction.op0_register().into() {
-                        if instruction.immediate32() == 0x4 {
-                            return false;
-                        }
+                    if reg_allocation.vip == instruction.op0_register().into() &&
+                       instruction.immediate32() == 0x4
+                    {
+                        return false;
                     }
                 },
                 _ => continue,
@@ -575,9 +574,9 @@ impl From<iced_x86::Register> for Registers {
     }
 }
 
-impl Into<iced_x86::Register> for Registers {
-    fn into(self) -> iced_x86::Register {
-        match self {
+impl From<Registers> for iced_x86::Register {
+    fn from(reg: Registers) -> iced_x86::Register {
+        match reg {
             Registers::Rax => iced_x86::Register::RAX,
             Registers::Rbx => iced_x86::Register::RBX,
             Registers::Rcx => iced_x86::Register::RCX,
@@ -597,11 +596,6 @@ impl Into<iced_x86::Register> for Registers {
             _ => unreachable!(),
         }
     }
-}
-
-#[derive(Debug)]
-pub enum HandlerType {
-    VmEntry,
 }
 
 pub fn fetch_qword_vip(pe_file: &PeFile,
