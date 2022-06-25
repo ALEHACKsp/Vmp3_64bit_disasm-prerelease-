@@ -15,16 +15,20 @@ use vm_handler::{VmContext, VmHandler};
 use crate::util::handle_vm_call;
 use crate::vm_matchers::HandlerClass;
 
+fn parse_hex_vm_call(input_str: &str) -> Result<u64, std::num::ParseIntError> {
+    let str_trimmed = input_str.trim_start_matches("0x");
+    u64::from_str_radix(str_trimmed, 16)
+}
+
 #[derive(Parser, Debug)]
 struct CommandLineArgs {
     /// Input file
-    #[clap(value_parser)]
     pub input_file:      String,
     /// Vm call address
     /// Address of the push instruction in
     /// push <const>
     /// call vm_entry
-    #[clap(short, long, value_parser)]
+    #[clap(short, long, parse(try_from_str = parse_hex_vm_call))]
     pub vm_call_address: u64,
 }
 
